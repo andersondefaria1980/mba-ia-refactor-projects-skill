@@ -72,7 +72,9 @@ Recommendation: Separar em models e controllers por domínio.
 File: app.py:8
 Description: SECRET_KEY hardcoded como 'minha-chave-super-secreta-123'
 ...
+```
 
+```
 ================================
 Total: 14 findings
 ================================
@@ -446,3 +448,74 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 - **Projetos diferentes exigem adaptação** — a Fase 3 de um projeto já parcialmente organizado não vai ter as mesmas transformações de um monolito. Sua skill deve se adaptar ao contexto.
 - **Pedir confirmação na Fase 2 é obrigatório** — o humano deve revisar o relatório antes de qualquer modificação.
 - **Consulte as referências do curso** — revise a documentação oficial da ferramenta escolhida e os materiais das aulas para relembrar a estrutura e anatomia de uma skill.
+
+---
+
+## Análise Manual
+
+Análise realizada por leitura completa do código-fonte dos 3 projetos, antes da construção da skill. Os achados abaixo alimentaram diretamente o catálogo de anti-patterns em `reference/anti-pattern-catalog.md`.
+
+### Projeto 1 — code-smells-project (Python/Flask, monólito em 4 arquivos)
+
+Stack: Python 3 + Flask 3.1.1 + flask-cors 5.0.1, SQLite via `sqlite3` puro (sem ORM). Domínio: API de e-commerce (produtos, usuários, pedidos, itens de pedido).
+
+| # | Severidade | Local | Problema | Por que importa |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | `app.py:59-78` | `POST /admin/query` executa SQL arbitrário enviado pelo cliente (`cursor.execute(query)`), sem autenticação | Equivale a um shell SQL exposto na internet — permite drop de tabelas, exfiltração total do banco |
+| 2 | **CRITICAL** | `models.py:109-111` | `login_usuario` monta a query de autenticação por concatenação de string, permitindo bypass de login via SQL Injection (`' OR '1'='1`) | Quebra completamente o mecanismo de autenticação, não é "só" um SQLi qualquer |
+| 3 | **CRITICAL** | `app.py:7`, `controllers.py:288-289` | `SECRET_KEY` hardcoded e devolvida em texto puro pelo endpoint `/health`, junto com a flag de debug | Vaza o segredo usado para assinar sessões/tokens; qualquer um pode ler via `curl /health` |
+| 4 | `models.py:122-131`, `database.py:76-79` | **CRITICAL** | Senhas armazenadas e comparadas em texto puro, inclusive na massa de seed (`admin123`, `123456`) | Nenhuma proteção em caso de vazamento do banco; viola o mínimo de segurança para credenciais |
+| 5 | **HIGH** | `controllers.py:188-220` | Lógica de orquestração de pedido (checagem de estoque, cálculo de total, "envio" de notificação) embutida direto no controller, sem camada de serviço | Mistura HTTP handling com regra de negócio — impossível testar a regra isoladamente |
+| 6 | **HIGH** | `database.py:4-11` | Conexão SQLite única compartilhada em variável global de módulo (`db_connection`) | Estado mutável global acessado por todas as requisições concorrentes, sem isolamento por request |
+| 7 | **MEDIUM** | `models.py:171-233` | N+1 queries: para cada pedido, uma query de itens e, para cada item, uma query de produto — sem JOIN — duplicado em duas funções quase idênticas | Degrada performance conforme o volume de pedidos cresce; a duplicação dobra o custo de manutenção |
+| 8 | **MEDIUM** | `controllers.py:24-62` vs `64-96` | Bloco de validação (campos obrigatórios, preço/estoque negativo) copiado e colado entre `criar_produto` e `atualizar_produto` | Qualquer mudança de regra precisa ser replicada manualmente em 2+ lugares — fonte de bugs de inconsistência |
+| 9 | **LOW** | `app.py:11-30,32,47,59` | Registro de rotas inconsistente — mistura `add_url_rule` com `@app.route` sem critério | Reduz legibilidade e previsibilidade do roteamento |
+| 10 | **LOW** | `controllers.py:8,11,57,61,106,...`, `app.py:56` | Uso de `print()` para logging em vez do módulo `logging` | Sem níveis de log, sem timestamps, impossível filtrar/desligar em produção |
+
+### Projeto 2 — ecommerce-api-legacy (Node.js/Express, LMS com checkout)
+
+Stack: Node.js + Express ^4.18.2 + sqlite3 ^5.1.6 (banco em memória). Domínio real (apesar do nome da pasta): LMS — usuários, cursos, matrículas e pagamentos via checkout.
+
+| # | Severidade | Local | Problema | Por que importa |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | `src/utils.js:2-6` | Credenciais hardcoded no código-fonte, incluindo uma chave de gateway de pagamento com prefixo `pk_live_...` | Segredo de produção commitado no repositório — comprometimento imediato se o repo vazar |
+| 2 | **CRITICAL** | `src/AppManager.js:45` | Número completo de cartão de crédito logado em texto puro via `console.log`, junto da chave do gateway | Violação direta de PCI-DSS; dado de cartão nunca deve ir para log |
+| 3 | **CRITICAL** | `src/AppManager.js:46` | "Processamento" de pagamento aprova qualquer cartão cujo número comece com `"4"` (`cc.startsWith("4")`) | Não há validação real de pagamento — qualquer usuário "compra" qualquer curso de graça |
+| 4 | **CRITICAL** | `src/utils.js:17-23` (`badCrypto`) | "Hash" de senha implementado como base64 repetido e truncado — reversível, sem salt | Não é criptografia; equivale a guardar a senha praticamente em claro |
+| 5 | **HIGH** | `src/AppManager.js` (arquivo inteiro) | God Class: uma única classe cuida de conexão/schema do banco, todas as rotas HTTP e toda a regra de negócio (pagamento, matrícula, auditoria) | Impossível testar ou trocar qualquer parte isoladamente; qualquer mudança arrisca quebrar tudo |
+| 6 | **HIGH** | `src/AppManager.js:80,131` | `GET /api/admin/financial-report` e `DELETE /api/users/:id` sem nenhuma autenticação/autorização | Qualquer pessoa lê o relatório financeiro completo ou apaga usuários à vontade |
+| 7 | **MEDIUM** | `src/AppManager.js:83-127` | N+1 em pirâmide de callbacks: para cada curso, query de matrículas; para cada matrícula, query de usuário e de pagamento, com contadores manuais de pendência em vez de Promises | Performance ruim e propenso a bugs de concorrência (contadores que nunca fecham se uma query falha) |
+| 8 | **MEDIUM** | `src/utils.js:9-10` | Cache mutável em variável de módulo (`globalCache`), sem expiração, populado a cada checkout | Estado global compartilhado entre requisições, cresce indefinidamente, não é thread/process-safe |
+| 9 | **LOW** | `src/AppManager.js:29-33` | Nomes de variável de uma letra (`u`, `e`, `p`, `cid`, `cc`) para usuário, email, senha, curso e cartão | Dificulta entender o fluxo de checkout só de olhar o código |
+| 10 | **LOW** | `src/AppManager.js:46`, `utils.js:19-22` | Magic numbers/strings soltos (`"4"` como prefixo de bandeira, `10000` no loop do hash falso, `"PAID"`/`"DENIED"` repetidos como literais) | Sem constantes/enum, qualquer alteração de regra exige caçar strings repetidas pelo código |
+
+### Projeto 3 — task-manager-api (Python/Flask, com separação parcial em camadas)
+
+Stack: Python 3 + Flask 3.0.0 + Flask-SQLAlchemy 3.1.1, SQLite. Já possui pastas `models/`, `routes/`, `services/`, `utils/`, mas a separação é majoritariamente cosmética — o ponto central desta análise.
+
+| # | Severidade | Local | Problema | Por que importa |
+|---|---|---|---|---|
+| 1 | **CRITICAL** | `app.py:13` | `SECRET_KEY` hardcoded, apesar de `python-dotenv` estar nas dependências e nunca ser usado | Segredo de sessão exposto no código-fonte, sem nenhuma tentativa real de externalizar config |
+| 2 | **CRITICAL** | `models/user.py:29,32` | Senhas com hash MD5 sem salt | MD5 é criptograficamente quebrado para senhas — trivial de reverter via rainbow tables |
+| 3 | **CRITICAL** | Toda a aplicação (grep confirma zero `login_required`/checagem de token) | Nenhuma rota exige autenticação, incluindo `DELETE /users/<id>` e `DELETE /tasks/<id>` | Qualquer cliente anônimo lê, altera ou apaga qualquer dado de qualquer usuário |
+| 4 | **HIGH** | `routes/report_routes.py:12-101` | Lógica pesada de agregação/estatística implementada direto na rota, mesmo existindo uma pasta `services/` | A camada de serviço existe no projeto mas não é usada onde faria mais sentido — separação decorativa |
+| 5 | **HIGH** | `services/notification_service.py` e `utils/helpers.py` | `NotificationService` e as funções de `helpers.py` nunca são importados/chamados por nenhuma rota (confirmado via grep) | Camadas "mortas": dão a impressão de arquitetura em camadas, mas o fluxo real ignora completamente essas pastas |
+| 6 | **MEDIUM** | `routes/task_routes.py:41-57` | N+1 queries: para cada task, uma query separada de usuário e de categoria em vez de eager loading (`joinedload`) | Escala mal conforme o número de tasks cresce |
+| 7 | **MEDIUM** | Lógica de "overdue" duplicada em 6 lugares (`models/task.py:50-60`, `routes/task_routes.py:30-39,71-80,283-287`, `routes/user_routes.py:171-180`, `routes/report_routes.py:34-37,132-135`) | `Task.is_overdue()` já existe no model mas nunca é chamado — cada rota reimplementa o mesmo `if` | Seis pontos para manter sincronizados manualmente; risco alto de divergência de regra |
+| 8 | **MEDIUM** | Todas as rotas de listagem (`task_routes.py:14`, `user_routes.py:12`, `report_routes.py:30,53,159`) | `Model.query.all()` sem paginação em nenhum endpoint | Endpoint fica O(n) em payload conforme a tabela cresce; a própria seed (`seed.py:70`) já sinaliza isso como pendência |
+| 9 | **LOW** | `models/task.py:15-16,52`, `models/user.py:14`, várias rotas | Uso de `datetime.utcnow()`, depreciado desde Python 3.12 em favor de `datetime.now(timezone.utc)` | API deprecada — funciona hoje, mas gera warning e será removida em versões futuras do Python |
+| 10 | **LOW** | `app.py:7`, `routes/task_routes.py:7` | Imports não utilizados (`os`, `sys`, `json` em `app.py`; `json`, `os`, `sys`, `time` em `task_routes.py`) | Ruído no código, sinaliza falta de lint/CI configurado |
+
+---
+
+## Construção da Skill
+
+*(a preencher após a implementação da skill — seção B do desafio)*
+
+## Resultados
+
+*(a preencher após a execução da skill nos 3 projetos — seção C do desafio)*
+
+## Como Executar
+
+*(a preencher — seção D do desafio)*
