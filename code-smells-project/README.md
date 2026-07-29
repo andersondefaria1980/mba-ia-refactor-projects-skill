@@ -6,6 +6,7 @@ API de E-commerce em Python/Flask usada como entrada do desafio `refactor-arch`.
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env   # edite SECRET_KEY (e demais valores, se quiser) antes de rodar
 python app.py
 ```
 

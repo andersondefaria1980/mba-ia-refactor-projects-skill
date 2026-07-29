@@ -6,6 +6,7 @@ LMS API (com fluxo de checkout) em Node.js/Express usada como entrada do desafio
 
 ```bash
 npm install
+cp .env.example .env   # edite PAYMENT_GATEWAY_KEY e ADMIN_API_KEY antes de rodar
 npm start
 ```
 
