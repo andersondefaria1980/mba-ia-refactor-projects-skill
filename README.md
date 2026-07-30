@@ -523,7 +523,7 @@ Análise manual do código-fonte dos 3 projetos, realizada antes da construção
 
 ## Seção B - Construção da Skill
 
-> Escrita após a execução completa da skill no Projeto 1 (`code-smells-project`) e atualizada após a execução no Projeto 2 (`ecommerce-api-legacy`, Node/Express). Em nenhum dos dois casos foi preciso alterar o `SKILL.md` ou os arquivos de `references/` — `md5sum`/`diff -rq` entre as três pastas `.claude/skills/refactor-arch/` confirma que são cópias byte-idênticas, evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção. Ainda falta executar no Projeto 3 (`task-manager-api`, Flask parcialmente organizado) nesta branch — este texto será revisado de novo depois dessa execução, caso ela exija algum ajuste.
+> Escrita após a execução completa da skill nos 3 projetos: Projeto 1 (`code-smells-project`, Python/Flask monolítico), Projeto 2 (`ecommerce-api-legacy`, Node/Express) e Projeto 3 (`task-manager-api`, Flask parcialmente organizado). Em nenhum dos três casos foi preciso alterar o `SKILL.md` ou os arquivos de `references/` — `md5sum`/`diff -rq` entre as três pastas `.claude/skills/refactor-arch/` confirma que são cópias byte-idênticas, evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção.
 
 ### Decisões de design
 

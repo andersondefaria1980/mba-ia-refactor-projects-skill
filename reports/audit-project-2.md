@@ -10,11 +10,11 @@ Project: ecommerce-api-legacy
 Stack:   JavaScript (Node.js) + Express ^4.18.2
 Files:   3 analyzed | ~180 lines of code
 
-Summary
+## Summary
 
 CRITICAL: 2 | HIGH: 4 | MEDIUM: 2 | LOW: 4
 
-Findings
+## Findings
 
 [CRITICAL] Hardcoded Credentials / Secrets
 
