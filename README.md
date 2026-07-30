@@ -742,6 +742,17 @@ Rodando em http://localhost:5000
 2026-07-30 08:53:47 INFO werkzeug: 127.0.0.1 - - "GET /produtos/busca?nome=Notebook'-- HTTP/1.1" 200 -  ← tentativa de SQLi neutralizada
 ```
 
+Screenshots (`curl`/navegador) do Projeto 1 em execução, na ordem dos arquivos em `screenshots/`:
+
+| Screenshot | Endpoint testado |
+|---|---|
+| ![Health check](screenshots/1.1-code-smells-project-health.png) | `GET /health` |
+| ![Listagem de pedidos](screenshots/1.2-code-smells-project-pedidos.png) | `GET /pedidos` |
+| ![Criação de pedido](screenshots/1.3-code-smells-project-pedidos-criar.png) | `POST /pedidos` |
+| ![Listagem de produtos](screenshots/1.4-code-smells-project-produtos.png) | `GET /produtos` |
+| ![Listagem de usuários](screenshots/1.5-code-smells-project-usuarios.png) | `GET /usuarios` |
+| ![Login](screenshots/1.6-code-smells-project-login.png) | `POST /login` |
+
 **Projeto 2 — ecommerce-api-legacy** (`node src/app.js`, depois `curl`):
 
 ```
@@ -754,6 +765,13 @@ $ curl /api/admin/financial-report (com x-api-key)   → 200 [{"course":"Clean A
 $ curl -X DELETE /api/users/1 (sem x-api-key)         → 401 {"error":"Não autorizado"}
 $ curl -X DELETE /api/users/1 (com x-api-key)         → 200 "Usuário deletado com sucesso, incluindo matrículas e pagamentos associados."
 ```
+
+Screenshots (`curl`) do Projeto 2 em execução, na ordem dos arquivos em `screenshots/`:
+
+| Screenshot | Endpoint testado |
+|---|---|
+| ![Relatório financeiro (admin)](screenshots/2.1-eccomerce-api-legacy-financial-report.png) | `GET /api/admin/financial-report` |
+| ![Checkout](screenshots/2.2-eccomerce-api-legacy-checkout.png) | `POST /api/checkout` |
 
 **Projeto 3 — task-manager-api** (`python seed.py` + `python app.py`, depois `curl`):
 
@@ -770,6 +788,16 @@ $ curl -X POST /login {"email":"joao@email.com","password":"1234"}
 $ curl -X PUT /categories/1 -d '{}'          → 400 {"error":"Dados inválidos"}                ← bug de validação ausente corrigido
 $ curl /nao-existe                           → 404 default do Flask (middleware de erro não interfere em HTTPException)
 ```
+
+Screenshots (`curl`) do Projeto 3 em execução, na ordem dos arquivos em `screenshots/`:
+
+| Screenshot | Endpoint testado |
+|---|---|
+| ![Listagem de usuários](screenshots/3.1-task-manager-api-users-list.png) | `GET /users` |
+| ![Buscar usuário por ID](screenshots/3.2-task-manager-api-get-user.png) | `GET /users/<id>` |
+| ![Criação de usuário](screenshots/3.3-task-manager-api-create-user.png) | `POST /users` |
+| ![Listagem de tasks](screenshots/3.4-task-manager-api-tasks.png) | `GET /tasks` |
+| ![Criação de task](screenshots/3.5-task-manager-api-create-task.png) | `POST /tasks` |
 
 ### Observações sobre o comportamento da skill em stacks diferentes
 

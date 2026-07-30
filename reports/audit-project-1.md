@@ -2,7 +2,7 @@
 
 ================================
 PHASE 1: PROJECT ANALYSIS
-
+================================
 Language:      Python
 Framework:      Flask 3.1.1 (requirements.txt: flask==3.1.1)
 Dependencies:  flask-cors==5.0.1, sqlite3 (stdlib driver, no ORM)
