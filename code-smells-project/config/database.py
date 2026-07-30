@@ -1,16 +1,39 @@
 import sqlite3
-import os
 
-db_connection = None
-db_path = "loja.db"
+from werkzeug.security import generate_password_hash
 
-def get_db():
-    global db_connection
-    if db_connection is None:
-        db_connection = sqlite3.connect(db_path, check_same_thread=False)
-        db_connection.row_factory = sqlite3.Row
-        cursor = db_connection.cursor()
 
+class Database:
+    """Encapsulates the sqlite3 connection, schema creation and seed data.
+
+    A single instance is created in the composition root (app.py) and
+    injected into models, instead of a lazily-initialized module-level
+    global mutated by every caller.
+    """
+
+    def __init__(self, path):
+        self._connection = sqlite3.connect(path, check_same_thread=False)
+        self._connection.row_factory = sqlite3.Row
+        self._create_schema()
+        self._seed()
+
+    def get_connection(self):
+        return self._connection
+
+    def ping(self):
+        self._connection.cursor().execute("SELECT 1")
+
+    def reset(self):
+        """Apaga todos os dados de negócio, preservando o schema."""
+        cursor = self._connection.cursor()
+        cursor.execute("DELETE FROM itens_pedido")
+        cursor.execute("DELETE FROM pedidos")
+        cursor.execute("DELETE FROM produtos")
+        cursor.execute("DELETE FROM usuarios")
+        self._connection.commit()
+
+    def _create_schema(self):
+        cursor = self._connection.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS produtos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +74,10 @@ def get_db():
                 preco_unitario REAL
             )
         """)
-        db_connection.commit()
+        self._connection.commit()
+
+    def _seed(self):
+        cursor = self._connection.cursor()
 
         cursor.execute("SELECT COUNT(*) FROM produtos")
         if cursor.fetchone()[0] == 0:
@@ -69,18 +95,16 @@ def get_db():
             ]
             cursor.executemany(
                 "INSERT INTO produtos (nome, descricao, preco, estoque, categoria) VALUES (?, ?, ?, ?, ?)",
-                produtos
+                produtos,
             )
 
             usuarios = [
-                ("Admin", "admin@loja.com", "admin123", "admin"),
-                ("João Silva", "joao@email.com", "123456", "cliente"),
-                ("Maria Santos", "maria@email.com", "senha123", "cliente"),
+                ("Admin", "admin@loja.com", generate_password_hash("admin123"), "admin"),
+                ("João Silva", "joao@email.com", generate_password_hash("123456"), "cliente"),
+                ("Maria Santos", "maria@email.com", generate_password_hash("senha123"), "cliente"),
             ]
             cursor.executemany(
                 "INSERT INTO usuarios (nome, email, senha, tipo) VALUES (?, ?, ?, ?)",
-                usuarios
+                usuarios,
             )
-            db_connection.commit()
-
-    return db_connection
+            self._connection.commit()
