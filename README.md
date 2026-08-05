@@ -523,7 +523,7 @@ Para cada projeto foram documentados 5 problemas: 1 CRITICAL/HIGH, 2 MEDIUM e 2 
 
 ## Seção B - Construção da Skill
 
-> Escrita após a execução completa da skill nos 3 projetos: Projeto 1 (`code-smells-project`, Python/Flask monolítico), Projeto 2 (`ecommerce-api-legacy`, Node/Express) e Projeto 3 (`task-manager-api`, Flask parcialmente organizado). As três pastas `.claude/skills/refactor-arch/` continuam byte-idênticas (`diff -rq` entre elas não acusa nenhuma diferença) — evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção.
+> Escrita após a execução completa da skill nos 3 projetos: Projeto 1 (`code-smells-project`, Python/Flask monolítico), Projeto 2 (`ecommerce-api-legacy`, Node/Express) e Projeto 3 (`task-manager-api`, Flask parcialmente organizado). As três pastas `.claude/skills/refactor-arch/` continuam idênticas (`diff -rq` entre elas não acusa nenhuma diferença) — evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção.
 >
 > **Iteração pós-execução:** depois da primeira rodada completa nos 3 projetos, o `SKILL.md` e o `refactoring-playbook.md` foram revisados para deixar **obrigatório** (não mais opcional/dependente de "decisão de produto") que a Fase 3 aplique middleware/decorator de autenticação em **todas** as rotas de negócio, não só nas administrativas — a mesma atualização foi propagada para as três cópias da skill. O Projeto 3 (`task-manager-api`) e o Projeto 2 (`ecommerce-api-legacy`) já foram re-executados do zero com o `SKILL.md` atualizado, validando essa mudança de ponta a ponta (ver bullets específicos abaixo e a Seção C — no Projeto 2 isso incluiu passar a exigir token até no `POST /api/checkout`, que antes era 100% público). O Projeto 1 (`code-smells-project`) **ainda não foi re-executado** com essa versão da skill — o código refatorado documentado nesta seção reflete a rodada anterior, que já protegia rotas administrativas sensíveis mas não exigia token em 100% dos endpoints. Isso é uma lacuna conhecida, não um comportamento pretendido: a skill em si já suportaria a correção também no Projeto 1, falta apenas rodar a Fase 3 novamente nele.
 
@@ -753,12 +753,12 @@ Screenshots (`curl`/navegador) do Projeto 1 em execução, na ordem dos arquivos
 
 | Screenshot | Endpoint testado |
 |---|---|
+| ![Login](screenshots/1.0-code-smells-project-login.png) | `POST /login` |
 | ![Health check](screenshots/1.1-code-smells-project-health.png) | `GET /health` |
 | ![Listagem de pedidos](screenshots/1.2-code-smells-project-pedidos.png) | `GET /pedidos` |
 | ![Criação de pedido](screenshots/1.3-code-smells-project-pedidos-criar.png) | `POST /pedidos` |
 | ![Listagem de produtos](screenshots/1.4-code-smells-project-produtos.png) | `GET /produtos` |
 | ![Listagem de usuários](screenshots/1.5-code-smells-project-usuarios.png) | `GET /usuarios` |
-| ![Login](screenshots/1.6-code-smells-project-login.png) | `POST /login` |
 
 **Projeto 2 — ecommerce-api-legacy** (`node src/app.js`, depois `curl`):
 
@@ -776,7 +776,7 @@ $ curl -X DELETE /api/users/abc -H "Authorization: Bearer <token>"              
 $ curl /api/admin/financial-report -H "Authorization: Bearer token-errado"         → 401 {"error":"Token inválido"}
 ```
 
-Screenshots (Postman) do Projeto 2 em execução, já com o esquema de autenticação final (`Authorization: Bearer <ADMIN_API_KEY>`, aplicado inclusive ao `POST /api/checkout`), na ordem dos arquivos em `screenshots/`:
+Screenshots (Postman) do Projeto 2 em execução, na ordem dos arquivos em `screenshots/`:
 
 | Screenshot | Endpoint testado |
 |---|---|
@@ -929,7 +929,7 @@ O maior aprendizado deste desafio não foi escrever o catálogo de anti-patterns
 - **"Agnóstico de tecnologia" é mais sobre nível de organização do que sobre linguagem.** As três execuções confirmaram isso na prática: o mesmo `SKILL.md` + arquivos de referência, copiados byte-a-byte, lidaram bem com um monólito Python, um "God Class" em Node com callbacks, e um Flask parcialmente organizado — sem ajustar uma linha entre execuções. A adaptação real acontece dentro da própria skill (o "Princípio de adaptação" da Fase 3), não fora dela.
 - **Preservar contrato tem limite, e esse limite é o próprio finding de segurança.** Em todos os 3 projetos a Fase 3 quebrou algum comportamento antigo de propósito — endpoint de SQL arbitrário removido no Projeto 1, senha fraca padrão removida e todas as rotas passando a exigir token no Projeto 2, autenticação forjável substituída por JWT real no Projeto 3. A regra que funcionou bem: nunca quebrar por estética, sempre documentar quando quebrar por segurança.
 - **Nem toda proteção exige inventar infraestrutura nova.** No Projeto 2 a tentação seria implementar login + JWT completos (como o playbook exemplifica), mas o legado nunca teve conceito de sessão — o checkout cria conta implicitamente, sem autenticar. Reaproveitar o `ADMIN_API_KEY` já provisionado (e nunca lido) no `.env` como chave de serviço estática resolveu o finding sem inventar um fluxo de usuário que a aplicação original nunca teve.
-- **Documentação também precisa de auditoria — e não só de código.** Ao revisar este README, encontrei descrições do Projeto 2 (header `x-api-key`, exclusão em cascata, arquivo `adminController.js`, screenshots de Postman de uma iteração anterior sem auth no checkout) que já não batiam com o código efetivamente commitado após a última rodada da skill (header `Authorization: Bearer` nas 3 rotas, exclusão preservando o comportamento original, `reportController.js`). Corrigi o texto para refletir o comportamento real, validado por `curl`, e depois recapturei as screenshots do Postman já com o esquema de autenticação final — README errado é tão arriscado quanto código errado, porque é nele que alguém vai confiar para saber o que testar.
+- **Documentação também precisa de auditoria — e não só de código.** Ao revisar este README para escrever esta seção, encontrei descrições do Projeto 2 (header `x-api-key`, exclusão em cascata, arquivo `adminController.js`) que já não batiam com o código efetivamente commitado após a última rodada da skill (header `Authorization: Bearer`, exclusão preservando o comportamento original, `reportController.js`). As screenshots de Postman também ficaram presas à versão anterior. Corrigi o texto para refletir o comportamento real e validado por `curl` nesta sessão, e deixei uma nota explícita nas screenshots desatualizadas em vez de apagar a evidência — README errado é tão arriscado quanto código errado, porque é nele que alguém vai confiar para saber o que testar.
 - **O catálogo cobre padrões conhecidos, não bugs de domínio.** Ficou claro nas revisões independentes (Projeto 1) que anti-patterns arquiteturais e falhas de negócio são categorias diferentes — uma skill de refatoração estrutural não substitui revisão de regra de negócio. É um limite real da abordagem, não um bug da skill.
 
 Se fosse continuar o projeto, o próximo passo seria fechar a lacuna conhecida do Projeto 1 (rodar a Fase 3 novamente com o `SKILL.md` atualizado, para exigir token em 100% das rotas de negócio como já foi feito nos Projetos 2 e 3) e considerar um catálogo adicional, mais específico de domínio, para os casos que a auditoria estrutural não alcança (ex: regras de estoque, limites de negócio).
