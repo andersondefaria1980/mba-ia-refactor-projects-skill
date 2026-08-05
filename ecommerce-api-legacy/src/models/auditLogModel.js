@@ -1,6 +1,6 @@
-function createAuditLogModel(db) {
+function auditLogModel(db) {
     return {
-        log(action) {
+        create(action) {
             return db.run(
                 "INSERT INTO audit_logs (action, created_at) VALUES (?, datetime('now'))",
                 [action]
@@ -9,4 +9,4 @@ function createAuditLogModel(db) {
     };
 }
 
-module.exports = createAuditLogModel;
+module.exports = auditLogModel;

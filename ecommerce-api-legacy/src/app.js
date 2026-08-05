@@ -1,60 +1,69 @@
 const express = require('express');
+
 const config = require('./config');
-const logger = require('./utils/logger');
-const MemoryCache = require('./utils/cache');
-const { createDatabase } = require('./models/database');
-const createUserModel = require('./models/userModel');
-const createCourseModel = require('./models/courseModel');
-const createEnrollmentModel = require('./models/enrollmentModel');
-const { createPaymentModel } = require('./models/paymentModel');
-const createAuditLogModel = require('./models/auditLogModel');
-const createReportModel = require('./models/reportModel');
-const createCheckoutController = require('./controllers/checkoutController');
-const createAdminController = require('./controllers/adminController');
-const createUserController = require('./controllers/userController');
+const Database = require('./models/database');
+const userModel = require('./models/userModel');
+const courseModel = require('./models/courseModel');
+const enrollmentModel = require('./models/enrollmentModel');
+const paymentModel = require('./models/paymentModel');
+const auditLogModel = require('./models/auditLogModel');
+const reportModel = require('./models/reportModel');
+const seed = require('./models/seed');
+
+const checkoutController = require('./controllers/checkoutController');
+const reportController = require('./controllers/reportController');
+const userController = require('./controllers/userController');
+
+const checkoutRoutes = require('./routes/checkoutRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const userRoutes = require('./routes/userRoutes');
+
 const requireAdminAuth = require('./middlewares/requireAdminAuth');
 const errorHandler = require('./middlewares/errorHandler');
-const createCheckoutRoutes = require('./routes/checkoutRoutes');
-const createAdminRoutes = require('./routes/adminRoutes');
-const createUserRoutes = require('./routes/userRoutes');
 
-async function bootstrap() {
-    const db = createDatabase(config.dbPath);
+const Cache = require('./utils/cache');
+const logger = require('./utils/logger');
+
+async function createApp() {
+    const db = new Database(config.dbPath);
     await db.init();
 
-    const userModel = createUserModel(db);
-    const courseModel = createCourseModel(db);
-    const enrollmentModel = createEnrollmentModel(db);
-    const paymentModel = createPaymentModel(db);
-    const auditLogModel = createAuditLogModel(db);
-    const reportModel = createReportModel(db);
-    const cache = new MemoryCache();
+    const models = {
+        userModel: userModel(db),
+        courseModel: courseModel(db),
+        enrollmentModel: enrollmentModel(db),
+        paymentModel: paymentModel(db),
+        auditLogModel: auditLogModel(db),
+        reportModel: reportModel(db),
+        cache: new Cache(),
+    };
 
-    const checkoutController = createCheckoutController({
-        courseModel,
-        userModel,
-        enrollmentModel,
-        paymentModel,
-        auditLogModel,
-        cache,
-    });
-    const adminController = createAdminController({ reportModel });
-    const userController = createUserController({ userModel, enrollmentModel, paymentModel });
-
-    const adminAuthMiddleware = requireAdminAuth(config);
+    await seed(models);
 
     const app = express();
     app.use(express.json());
+    app.use('/api', requireAdminAuth(config));
 
-    app.use('/api', createCheckoutRoutes(checkoutController));
-    app.use('/api', createAdminRoutes(adminController, adminAuthMiddleware));
-    app.use('/api', createUserRoutes(userController, adminAuthMiddleware));
+    app.use(checkoutRoutes(checkoutController(models)));
+    app.use(adminRoutes(reportController(models)));
+    app.use(userRoutes(userController(models)));
 
     app.use(errorHandler);
 
-    app.listen(config.port, () => {
-        logger.info(`Frankenstein LMS rodando na porta ${config.port}...`);
-    });
+    return app;
 }
 
-bootstrap();
+if (require.main === module) {
+    createApp()
+        .then((app) => {
+            app.listen(config.port, () => {
+                logger.info(`Frankenstein LMS rodando na porta ${config.port}...`);
+            });
+        })
+        .catch((err) => {
+            logger.error('Falha ao iniciar a aplicação', err);
+            process.exit(1);
+        });
+}
+
+module.exports = createApp;

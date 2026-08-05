@@ -1,46 +1,46 @@
-function createReportModel(db) {
+const { PAYMENT_STATUS } = require('./paymentModel');
+
+function reportModel(db) {
     return {
-        async getFinancialReport() {
+        async buildFinancialReport() {
             const rows = await db.all(`
                 SELECT c.id AS course_id, c.title AS course_title,
-                       e.id AS enrollment_id,
                        u.name AS student_name,
                        p.amount AS paid_amount, p.status AS payment_status
                 FROM courses c
                 LEFT JOIN enrollments e ON e.course_id = c.id
                 LEFT JOIN users u ON u.id = e.user_id
                 LEFT JOIN payments p ON p.enrollment_id = e.id
-                ORDER BY c.id, e.id
+                ORDER BY c.id
             `);
 
-            const reportByCourseId = new Map();
+            const coursesById = new Map();
 
-            rows.forEach((row) => {
-                if (!reportByCourseId.has(row.course_id)) {
-                    reportByCourseId.set(row.course_id, {
+            for (const row of rows) {
+                if (!coursesById.has(row.course_id)) {
+                    coursesById.set(row.course_id, {
                         course: row.course_title,
                         revenue: 0,
                         students: [],
                     });
                 }
 
-                if (row.enrollment_id === null) return;
+                const courseData = coursesById.get(row.course_id);
 
-                const courseReport = reportByCourseId.get(row.course_id);
-
-                if (row.payment_status === 'PAID') {
-                    courseReport.revenue += row.paid_amount;
+                if (row.student_name) {
+                    if (row.payment_status === PAYMENT_STATUS.PAID) {
+                        courseData.revenue += row.paid_amount;
+                    }
+                    courseData.students.push({
+                        student: row.student_name,
+                        paid: row.paid_amount || 0,
+                    });
                 }
+            }
 
-                courseReport.students.push({
-                    student: row.student_name || 'Unknown',
-                    paid: row.paid_amount || 0,
-                });
-            });
-
-            return Array.from(reportByCourseId.values());
+            return Array.from(coursesById.values());
         },
     };
 }
 
-module.exports = createReportModel;
+module.exports = reportModel;

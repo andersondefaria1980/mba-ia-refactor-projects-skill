@@ -1,18 +1,15 @@
-const logger = require('./logger');
-
-class MemoryCache {
+class Cache {
     constructor() {
-        this.store = {};
+        this.store = new Map();
     }
 
     set(key, value) {
-        logger.info(`Salvando no cache: ${key}`);
-        this.store[key] = value;
+        this.store.set(key, value);
     }
 
     get(key) {
-        return this.store[key];
+        return this.store.get(key);
     }
 }
 
-module.exports = MemoryCache;
+module.exports = Cache;

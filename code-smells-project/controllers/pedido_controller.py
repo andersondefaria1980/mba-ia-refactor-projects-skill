@@ -30,7 +30,11 @@ def criar_pedido():
     if "erro" in resultado:
         return jsonify({"erro": resultado["erro"], "sucesso": False}), 400
 
-    logger.info("Notificando pedido %s criado para usuario %s (email, sms, push)", resultado["pedido_id"], usuario_id)
+    logger.info(
+        "Notificando pedido %s criado para usuario %s (email, sms, push)",
+        resultado["pedido_id"],
+        usuario_id,
+    )
 
     return jsonify({
         "dados": resultado,

@@ -1,31 +1,22 @@
 import logging
-from datetime import timedelta
 
-import jwt
+from sqlalchemy.orm import joinedload
 
-from config.settings import Settings
 from database import db
 from models.task import Task
 from models.user import User
-from utils.helpers import MIN_PASSWORD_LENGTH, VALID_ROLES, utcnow, validate_email
+from utils.helpers import VALID_ROLES, validate_email
 
 logger = logging.getLogger(__name__)
 
 
 def list_users():
-    users = User.query.all()
-    result = [
-        {
-            'id': u.id,
-            'name': u.name,
-            'email': u.email,
-            'role': u.role,
-            'active': u.active,
-            'created_at': str(u.created_at),
-            'task_count': len(u.tasks),
-        }
-        for u in users
-    ]
+    users = User.query.options(joinedload(User.tasks)).all()
+    result = []
+    for u in users:
+        user_data = u.to_dict()
+        user_data['task_count'] = len(u.tasks)
+        result.append(user_data)
     return result, 200
 
 
@@ -54,12 +45,17 @@ def create_user(data):
         return {'error': 'Email é obrigatório'}, 400
     if not password:
         return {'error': 'Senha é obrigatória'}, 400
+
     if not validate_email(email):
         return {'error': 'Email inválido'}, 400
-    if len(password) < MIN_PASSWORD_LENGTH:
+
+    if len(password) < 4:
         return {'error': 'Senha deve ter no mínimo 4 caracteres'}, 400
-    if User.query.filter_by(email=email).first():
+
+    existing = User.query.filter_by(email=email).first()
+    if existing:
         return {'error': 'Email já cadastrado'}, 409
+
     if role not in VALID_ROLES:
         return {'error': 'Role inválido'}, 400
 
@@ -69,9 +65,14 @@ def create_user(data):
     user.set_password(password)
     user.role = role
 
-    db.session.add(user)
-    db.session.commit()
-    logger.info("Usuário criado: %s - %s", user.id, user.name)
+    try:
+        db.session.add(user)
+        db.session.commit()
+        logger.info("Usuário criado: %s - %s", user.id, user.name)
+    except Exception:
+        db.session.rollback()
+        logger.exception("Erro ao criar usuário")
+        return {'error': 'Erro ao criar usuário'}, 500
 
     return user.to_dict(), 201
 
@@ -97,7 +98,7 @@ def update_user(user_id, data):
         user.email = data['email']
 
     if 'password' in data:
-        if len(data['password']) < MIN_PASSWORD_LENGTH:
+        if len(data['password']) < 4:
             return {'error': 'Senha muito curta'}, 400
         user.set_password(data['password'])
 
@@ -109,7 +110,13 @@ def update_user(user_id, data):
     if 'active' in data:
         user.active = data['active']
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("Erro ao atualizar usuário")
+        return {'error': 'Erro ao atualizar'}, 500
+
     return user.to_dict(), 200
 
 
@@ -122,9 +129,14 @@ def delete_user(user_id):
     for t in tasks:
         db.session.delete(t)
 
-    db.session.delete(user)
-    db.session.commit()
-    logger.info("Usuário deletado: %s", user_id)
+    try:
+        db.session.delete(user)
+        db.session.commit()
+        logger.info("Usuário deletado: %s", user_id)
+    except Exception:
+        db.session.rollback()
+        logger.exception("Erro ao deletar usuário")
+        return {'error': 'Erro ao deletar'}, 500
 
     return {'message': 'Usuário deletado com sucesso'}, 200
 
@@ -135,8 +147,9 @@ def get_user_tasks(user_id):
         return {'error': 'Usuário não encontrado'}, 404
 
     tasks = Task.query.filter_by(user_id=user_id).all()
-    result = [
-        {
+    result = []
+    for t in tasks:
+        result.append({
             'id': t.id,
             'title': t.title,
             'description': t.description,
@@ -145,9 +158,8 @@ def get_user_tasks(user_id):
             'created_at': str(t.created_at),
             'due_date': str(t.due_date) if t.due_date else None,
             'overdue': t.is_overdue(),
-        }
-        for t in tasks
-    ]
+        })
+
     return result, 200
 
 
@@ -171,17 +183,8 @@ def login(data):
     if not user.active:
         return {'error': 'Usuário inativo'}, 403
 
-    token = jwt.encode(
-        {
-            'user_id': user.id,
-            'exp': utcnow() + timedelta(seconds=Settings.TOKEN_TTL_SECONDS),
-        },
-        Settings.SECRET_KEY,
-        algorithm='HS256',
-    )
-
     return {
         'message': 'Login realizado com sucesso',
         'user': user.to_dict(),
-        'token': token,
+        'token': user.generate_token()
     }, 200

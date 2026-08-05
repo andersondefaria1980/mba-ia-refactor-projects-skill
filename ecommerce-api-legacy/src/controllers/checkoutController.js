@@ -1,14 +1,13 @@
-const { hashPassword } = require('../utils/security');
 const { PAYMENT_STATUS } = require('../models/paymentModel');
+const { hashPassword } = require('../utils/security');
+const logger = require('../utils/logger');
 
-const DEFAULT_PASSWORD = '123456';
+function checkoutController({ userModel, courseModel, enrollmentModel, paymentModel, auditLogModel, cache }) {
+    return {
+        async checkout(req, res) {
+            const { usr, eml, pwd, c_id: courseId, card } = req.body;
 
-function createCheckoutController({ courseModel, userModel, enrollmentModel, paymentModel, auditLogModel, cache }) {
-    return async function checkout(req, res, next) {
-        try {
-            const { usr: username, eml: email, pwd: password, c_id: courseId, card: cardNumber } = req.body;
-
-            if (!username || !email || !courseId || !cardNumber) {
+            if (!usr || !eml || !courseId || !card) {
                 return res.status(400).send('Bad Request');
             }
 
@@ -17,30 +16,37 @@ function createCheckoutController({ courseModel, userModel, enrollmentModel, pay
                 return res.status(404).send('Curso não encontrado');
             }
 
-            const existingUser = await userModel.findByEmail(email);
-            let userId = existingUser ? existingUser.id : null;
+            let user = await userModel.findByEmail(eml);
+            let userId;
 
-            if (!userId) {
-                const passwordHash = hashPassword(password || DEFAULT_PASSWORD);
-                userId = await userModel.create({ name: username, email, passwordHash });
+            if (!user) {
+                if (!pwd) {
+                    return res.status(400).send('Bad Request');
+                }
+                userId = await userModel.create({
+                    name: usr,
+                    email: eml,
+                    passwordHash: hashPassword(pwd),
+                });
+            } else {
+                userId = user.id;
             }
 
-            const status = paymentModel.simulateCharge(cardNumber);
+            logger.info(`Processando checkout do curso ${courseId} para o usuário ${userId}`);
+            const status = card.startsWith('4') ? PAYMENT_STATUS.PAID : PAYMENT_STATUS.DENIED;
+
             if (status === PAYMENT_STATUS.DENIED) {
                 return res.status(400).send('Pagamento recusado');
             }
 
-            const enrollmentId = await enrollmentModel.create(userId, courseId);
-            await paymentModel.create(enrollmentId, course.price, status);
-            await auditLogModel.log(`Checkout curso ${courseId} por ${userId}`);
-
+            const enrollmentId = await enrollmentModel.create({ userId, courseId });
+            await paymentModel.create({ enrollmentId, amount: course.price, status });
+            await auditLogModel.create(`Checkout curso ${courseId} por ${userId}`);
             cache.set(`last_checkout_${userId}`, course.title);
 
             res.status(200).json({ msg: 'Sucesso', enrollment_id: enrollmentId });
-        } catch (err) {
-            next(err);
-        }
+        },
     };
 }
 
-module.exports = createCheckoutController;
+module.exports = checkoutController;

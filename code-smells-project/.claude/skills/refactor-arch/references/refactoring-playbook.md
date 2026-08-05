@@ -195,7 +195,7 @@ token = jwt.encode(
 )
 ```
 
-**Emitir o token não fecha este finding sozinho.** Toda rota de escrita (POST/PUT/PATCH/DELETE) citada no finding precisa passar a validar esse token via um middleware/decorator — nunca confiar cegamente em um `user_id`/`role` enviado pelo cliente. Construa e aplique o middleware de verificação, com o mesmo nível de detalhe do exemplo de emissão acima:
+**Emitir o token não fecha este finding sozinho.** Toda rota (GET/POST/PUT/PATCH/DELETE) citada no finding precisa passar a validar esse token via um middleware/decorator — nunca confiar cegamente em um `user_id`/`role` enviado pelo cliente. Construa e aplique o middleware de verificação, com o mesmo nível de detalhe do exemplo de emissão acima:
 
 **Depois (Python/Flask — middleware de verificação):**
 ```python
@@ -271,7 +271,7 @@ module.exports = authenticateToken;
 router.post('/tasks', authenticateTokenMiddleware, taskController.createTask);
 ```
 
-Aplique o decorator/middleware em **cada** rota de escrita listada no finding (não só em uma como exemplo) — o Passo 5 da Fase 3 (`SKILL.md`) exige validar isso com `curl` antes de reportar a fase como concluída.
+Aplique o decorator/middleware em **cada** rota listada no finding (não só em uma como exemplo) — o Passo 5 da Fase 3 (`SKILL.md`) exige validar isso com `curl` antes de reportar a fase como concluída.
 
 ---
 

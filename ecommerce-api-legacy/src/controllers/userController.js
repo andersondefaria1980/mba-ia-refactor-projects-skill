@@ -1,28 +1,15 @@
-function createUserController({ userModel, enrollmentModel, paymentModel }) {
-    return async function deleteUser(req, res, next) {
-        try {
-            const userId = Number(req.params.id);
-
-            if (!Number.isInteger(userId)) {
-                return res.status(400).send('Bad Request');
+function userController({ userModel }) {
+    return {
+        async deleteUser(req, res) {
+            const id = Number(req.params.id);
+            if (!Number.isInteger(id)) {
+                return res.status(400).send('ID de usuário inválido');
             }
 
-            const enrollments = await enrollmentModel.findIdsByUserId(userId);
-            const enrollmentIds = enrollments.map((enrollment) => enrollment.id);
-
-            await paymentModel.deleteByEnrollmentIds(enrollmentIds);
-            await enrollmentModel.deleteByUserId(userId);
-            const deleted = await userModel.deleteById(userId);
-
-            if (!deleted) {
-                return res.status(404).send('Usuário não encontrado');
-            }
-
-            res.send('Usuário deletado com sucesso, incluindo matrículas e pagamentos associados.');
-        } catch (err) {
-            next(err);
-        }
+            await userModel.deleteById(id);
+            res.send('Usuário deletado, mas as matrículas e pagamentos ficaram sujos no banco.');
+        },
     };
 }
 
-module.exports = createUserController;
+module.exports = userController;

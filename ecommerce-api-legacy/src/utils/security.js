@@ -2,8 +2,12 @@ const bcrypt = require('bcryptjs');
 
 const SALT_ROUNDS = 10;
 
-function hashPassword(password) {
-    return bcrypt.hashSync(password, SALT_ROUNDS);
+function hashPassword(plainPassword) {
+    return bcrypt.hashSync(plainPassword, SALT_ROUNDS);
 }
 
-module.exports = { hashPassword };
+function verifyPassword(plainPassword, hash) {
+    return bcrypt.compareSync(plainPassword, hash);
+}
+
+module.exports = { hashPassword, verifyPassword };

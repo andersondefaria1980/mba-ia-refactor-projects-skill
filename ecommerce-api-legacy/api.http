@@ -1,9 +1,10 @@
 @baseUrl = http://localhost:3000
-@adminApiKey = dev-only-admin-key-f7e6d5c4b3a2
+@apiKey = dev-only-admin-key-f7e6d5c4b3a2
 
 ### Checkout - sucesso
 POST {{baseUrl}}/api/checkout
 Content-Type: application/json
+Authorization: Bearer {{apiKey}}
 
 {
   "usr": "Guilherme",
@@ -16,6 +17,7 @@ Content-Type: application/json
 ### Checkout - pagamento recusado
 POST {{baseUrl}}/api/checkout
 Content-Type: application/json
+Authorization: Bearer {{apiKey}}
 
 {
   "usr": "João",
@@ -25,10 +27,10 @@ Content-Type: application/json
   "card": "5111222233334444"
 }
 
-### Relatório financeiro administrativo (requer x-api-key)
+### Relatório financeiro administrativo
 GET {{baseUrl}}/api/admin/financial-report
-x-api-key: {{adminApiKey}}
+Authorization: Bearer {{apiKey}}
 
-### Deletar usuário (requer x-api-key)
+### Deletar usuário
 DELETE {{baseUrl}}/api/users/1
-x-api-key: {{adminApiKey}}
+Authorization: Bearer {{apiKey}}

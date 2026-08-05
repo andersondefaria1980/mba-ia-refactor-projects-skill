@@ -77,16 +77,16 @@ Só execute esta fase após confirmação explícita do usuário na Fase 2.
 3. Garanta que ao final existam, no mínimo, camadas claras de:
    - **Config**: configuração e segredos centralizados, lidos de variáveis de ambiente (nunca hardcoded).
    - **Models**: acesso a dados e regras que operam sobre os dados, sem lógica de HTTP.
-   - **Views/Routes**: definição de rotas/endpoints, sem lógica de negócio nem SQL direto.
+   - **Views/Routes**: definição de rotas/endpoints, sem lógica de negócio nem SQL direto. **IMPORTANTE** Todas as rotas do projeto precisam exigir token de autenicação.
    - **Controllers**: orquestram o fluxo (validação, chamada a models/services, montagem da resposta).
-   - **Middlewares**: tratamento de erro centralizado (e outras cross-cutting concerns, como CORS/auth). Se algum finding da Fase 2 apontar rota(s) de escrita sem autenticação/autorização, não basta emitir o token no login: é obrigatório criar o middleware/decorator que **valida** esse token (ver item 6 do `refactoring-playbook.md`) e aplicá-lo em cada uma das rotas de escrita citadas no finding.
+   - **Middlewares**: tratamento de erro centralizado (e outras cross-cutting concerns, como CORS/auth). Se algum finding da Fase 2 apontar rota(s) sem autenticação/autorização, não basta emitir o token no login: é obrigatório criar o middleware/decorator que **valida** esse token (ver item 6 do `refactoring-playbook.md`) e aplicá-lo em cada uma das rotas citadas no finding.
    - **Entry point**: ponto de entrada único (composition root) que monta a aplicação.
 4. Preserve os contratos das rotas originais (mesmos paths, métodos HTTP, formatos de request/response), a menos que o finding exija corrigir um comportamento inseguro (ex: remover endpoint de execução de SQL arbitrário) — nesse caso, documente a mudança no resumo final.
 5. Após reestruturar, **valide o resultado**:
    - Instale dependências se necessário e suba a aplicação (comando apropriado à stack: ex. `python app.py`/`flask run`, `node src/app.js`, `npm start`) em background, com timeout curto.
    - Confirme que o processo inicia sem erros/exceptions no log de boot.
    - Faça requisições (`curl`) para os endpoints originais mapeados na Fase 1/2 e confirme que respondem com status esperado.
-   - Se algum finding tratou de autenticação/autorização em rotas de escrita: faça `curl` na rota protegida **sem** header de autenticação (deve responder 401) e depois **com** um token válido obtido via login (deve responder com o status de sucesso original) — não reporte o finding como resolvido sem esse par de testes.
+   - Para todas as rotas faça `curl` **sem** header de autenticação (deve responder 401) e depois **com** um token válido obtido via login (deve responder com o status de sucesso original) — não reporte o finding como resolvido sem esse par de testes.
    - Encerre o processo de teste ao final.
    - Se algo falhar, corrija e repita a validação antes de reportar sucesso — nunca reporte "Phase 3 complete" com a aplicação quebrada.
 6. Imprima o resumo final **exatamente** neste formato (ajustando ao caso real):
