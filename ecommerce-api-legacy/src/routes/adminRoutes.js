@@ -1,9 +1,10 @@
 const express = require('express');
+const asyncHandler = require('../utils/asyncHandler');
 
-function createAdminRoutes(adminController, requireAdminAuthMiddleware) {
+function adminRoutes(controller) {
     const router = express.Router();
-    router.get('/admin/financial-report', requireAdminAuthMiddleware, adminController);
+    router.get('/api/admin/financial-report', asyncHandler(controller.financialReport));
     return router;
 }
 
-module.exports = createAdminRoutes;
+module.exports = adminRoutes;

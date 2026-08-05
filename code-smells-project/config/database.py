@@ -4,11 +4,11 @@ from werkzeug.security import generate_password_hash
 
 
 class Database:
-    """Encapsulates the sqlite3 connection, schema creation and seed data.
+    """Encapsula a conexão sqlite3, criação de schema e seed de dados.
 
-    A single instance is created in the composition root (app.py) and
-    injected into models, instead of a lazily-initialized module-level
-    global mutated by every caller.
+    Uma única instância é criada no composition root (app.py) e injetada
+    nos models via app.config, em vez de uma global de módulo lazy-mutada
+    por qualquer chamador.
     """
 
     def __init__(self, path):

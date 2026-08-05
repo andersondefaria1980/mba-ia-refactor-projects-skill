@@ -195,7 +195,83 @@ token = jwt.encode(
 )
 ```
 
-E as rotas protegidas passam a validar esse token via middleware, em vez de confiarem cegamente no `user_id` enviado pelo cliente.
+**Emitir o token não fecha este finding sozinho.** Toda rota (GET/POST/PUT/PATCH/DELETE) citada no finding precisa passar a validar esse token via um middleware/decorator — nunca confiar cegamente em um `user_id`/`role` enviado pelo cliente. Construa e aplique o middleware de verificação, com o mesmo nível de detalhe do exemplo de emissão acima:
+
+**Depois (Python/Flask — middleware de verificação):**
+```python
+# middlewares/auth.py
+from functools import wraps
+
+import jwt
+from flask import jsonify, request
+
+from config.settings import Settings
+from models.user import User
+
+
+def token_required(view):
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Autenticação necessária"}), 401
+
+        token = auth_header[len("Bearer "):]
+        try:
+            payload = jwt.decode(token, Settings.SECRET_KEY, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"error": "Token inválido"}), 401
+
+        user = User.query.get(payload.get("user_id"))
+        if not user or not user.active:
+            return jsonify({"error": "Token inválido"}), 401
+
+        request.current_user = user
+        return view(*args, **kwargs)
+
+    return wrapper
+
+# routes/task_routes.py
+from middlewares.auth import token_required
+
+@task_bp.route("/tasks", methods=["POST"])
+@token_required
+def create_task():
+    ...
+```
+
+**Depois (Node/Express — middleware de verificação):**
+```javascript
+// middlewares/authenticateToken.js
+const jwt = require('jsonwebtoken');
+
+function authenticateToken(config) {
+    return function (req, res, next) {
+        const authHeader = req.get('Authorization') || '';
+        if (!authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'Autenticação necessária' });
+        }
+
+        const token = authHeader.slice('Bearer '.length);
+        jwt.verify(token, config.secretKey, (err, payload) => {
+            if (err) {
+                return res.status(401).json({ error: 'Token inválido ou expirado' });
+            }
+            req.userId = payload.userId;
+            next();
+        });
+    };
+}
+
+module.exports = authenticateToken;
+
+// routes/taskRoutes.js
+router.post('/tasks', authenticateTokenMiddleware, taskController.createTask);
+```
+
+Aplique o decorator/middleware em **cada** rota listada no finding (não só em uma como exemplo) — o Passo 5 da Fase 3 (`SKILL.md`) exige validar isso com `curl` antes de reportar a fase como concluída.
 
 ---
 

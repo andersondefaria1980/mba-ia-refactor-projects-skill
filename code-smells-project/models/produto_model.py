@@ -1,5 +1,11 @@
 CATEGORIAS_VALIDAS = ["informatica", "moveis", "vestuario", "geral", "eletronicos", "livros"]
 
+MENSAGENS_CAMPO_OBRIGATORIO = {
+    "nome": "Nome é obrigatório",
+    "preco": "Preço é obrigatório",
+    "estoque": "Estoque é obrigatório",
+}
+
 
 def _row_to_dict(row):
     return {
@@ -77,13 +83,6 @@ def buscar(conn, termo, categoria=None, preco_min=None, preco_max=None):
     cursor = conn.cursor()
     cursor.execute(query, params)
     return [_row_to_dict(row) for row in cursor.fetchall()]
-
-
-MENSAGENS_CAMPO_OBRIGATORIO = {
-    "nome": "Nome é obrigatório",
-    "preco": "Preço é obrigatório",
-    "estoque": "Estoque é obrigatório",
-}
 
 
 def validar_campos_basicos(dados):

@@ -1,11 +1,11 @@
-function createUserModel(db) {
+function userModel(db) {
     return {
         findByEmail(email) {
-            return db.get('SELECT id, name, email FROM users WHERE email = ?', [email]);
+            return db.get('SELECT * FROM users WHERE email = ?', [email]);
         },
 
         findById(id) {
-            return db.get('SELECT id, name, email FROM users WHERE id = ?', [id]);
+            return db.get('SELECT * FROM users WHERE id = ?', [id]);
         },
 
         async create({ name, email, passwordHash }) {
@@ -16,11 +16,10 @@ function createUserModel(db) {
             return result.lastID;
         },
 
-        async deleteById(id) {
-            const result = await db.run('DELETE FROM users WHERE id = ?', [id]);
-            return result.changes > 0;
+        deleteById(id) {
+            return db.run('DELETE FROM users WHERE id = ?', [id]);
         },
     };
 }
 
-module.exports = createUserModel;
+module.exports = userModel;

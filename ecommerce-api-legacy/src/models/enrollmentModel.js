@@ -1,6 +1,6 @@
-function createEnrollmentModel(db) {
+function enrollmentModel(db) {
     return {
-        async create(userId, courseId) {
+        async create({ userId, courseId }) {
             const result = await db.run(
                 'INSERT INTO enrollments (user_id, course_id) VALUES (?, ?)',
                 [userId, courseId]
@@ -8,14 +8,10 @@ function createEnrollmentModel(db) {
             return result.lastID;
         },
 
-        findIdsByUserId(userId) {
-            return db.all('SELECT id FROM enrollments WHERE user_id = ?', [userId]);
-        },
-
-        deleteByUserId(userId) {
-            return db.run('DELETE FROM enrollments WHERE user_id = ?', [userId]);
+        findByCourseId(courseId) {
+            return db.all('SELECT * FROM enrollments WHERE course_id = ?', [courseId]);
         },
     };
 }
 
-module.exports = createEnrollmentModel;
+module.exports = enrollmentModel;

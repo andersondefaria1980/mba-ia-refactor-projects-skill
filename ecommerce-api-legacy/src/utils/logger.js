@@ -1,10 +1,9 @@
-const logger = {
-    info(message) {
-        console.log(`[INFO] ${message}`);
-    },
-    error(message, err) {
-        console.error(`[ERROR] ${message}`, err || '');
-    },
-};
+function info(message) {
+    console.log(`[INFO] ${message}`);
+}
 
-module.exports = logger;
+function error(message, err) {
+    console.error(`[ERROR] ${message}`, err ? err.message : '');
+}
+
+module.exports = { info, error };

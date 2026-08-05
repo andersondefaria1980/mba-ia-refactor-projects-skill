@@ -438,7 +438,7 @@ A skill deve atingir os seguintes mínimos em **todos os 3 projetos**:
 
 ## Seção A - Análise Manual
 
-Análise manual do código-fonte dos 3 projetos, realizada antes da construção da skill `refactor-arch`. Para cada projeto foram documentados 5 problemas: 1 CRITICAL/HIGH, 2 MEDIUM e 2 LOW, com arquivo e linha exatos.
+Para cada projeto foram documentados 5 problemas: 1 CRITICAL/HIGH, 2 MEDIUM e 2 LOW, com arquivo e linha exatos.
 
 ### Projeto 1 — code-smells-project (Python/Flask)
 
@@ -523,7 +523,9 @@ Análise manual do código-fonte dos 3 projetos, realizada antes da construção
 
 ## Seção B - Construção da Skill
 
-> Escrita após a execução completa da skill nos 3 projetos: Projeto 1 (`code-smells-project`, Python/Flask monolítico), Projeto 2 (`ecommerce-api-legacy`, Node/Express) e Projeto 3 (`task-manager-api`, Flask parcialmente organizado). Em nenhum dos três casos foi preciso alterar o `SKILL.md` ou os arquivos de `references/` — `md5sum`/`diff -rq` entre as três pastas `.claude/skills/refactor-arch/` confirma que são cópias byte-idênticas, evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção.
+> Escrita após a execução completa da skill nos 3 projetos: Projeto 1 (`code-smells-project`, Python/Flask monolítico), Projeto 2 (`ecommerce-api-legacy`, Node/Express) e Projeto 3 (`task-manager-api`, Flask parcialmente organizado). As três pastas `.claude/skills/refactor-arch/` continuam byte-idênticas (`diff -rq` entre elas não acusa nenhuma diferença) — evidência direta de que a skill é agnóstica de tecnologia na prática, não só na intenção.
+>
+> **Iteração pós-execução:** depois da primeira rodada completa nos 3 projetos, o `SKILL.md` e o `refactoring-playbook.md` foram revisados para deixar **obrigatório** (não mais opcional/dependente de "decisão de produto") que a Fase 3 aplique middleware/decorator de autenticação em **todas** as rotas de negócio, não só nas administrativas — a mesma atualização foi propagada para as três cópias da skill. O Projeto 3 (`task-manager-api`) e o Projeto 2 (`ecommerce-api-legacy`) já foram re-executados do zero com o `SKILL.md` atualizado, validando essa mudança de ponta a ponta (ver bullets específicos abaixo e a Seção C — no Projeto 2 isso incluiu passar a exigir token até no `POST /api/checkout`, que antes era 100% público). O Projeto 1 (`code-smells-project`) **ainda não foi re-executado** com essa versão da skill — o código refatorado documentado nesta seção reflete a rodada anterior, que já protegia rotas administrativas sensíveis mas não exigia token em 100% dos endpoints. Isso é uma lacuna conhecida, não um comportamento pretendido: a skill em si já suportaria a correção também no Projeto 1, falta apenas rodar a Fase 3 novamente nele.
 
 ### Decisões de design
 
@@ -561,13 +563,14 @@ O maior risco de acoplamento não é a stack, é o **nível de organização pr�
 - **Token assinado sem adicionar dependência nova:** o `requirements.txt` original só tinha `flask` e `flask-cors`. Em vez de adicionar `PyJWT` só para gerar um token de sessão real (como o playbook sugere como exemplo), usei `itsdangerous` — que já é dependência transitiva do próprio Flask — para gerar tokens assinados com expiração real via `URLSafeTimedSerializer`.
 - **Handler de erro genérico capturando `HTTPException`:** ao centralizar o tratamento de erro com `@app.errorhandler(Exception)`, descobri que isso também intercepta exceções HTTP do próprio Flask/Werkzeug (404 de rota inexistente, por exemplo), convertendo-as erroneamente em 500. Corrigido checando `isinstance(e, HTTPException)` no início do handler e deixando essas exceções seguirem seu fluxo normal — só exceções verdadeiramente inesperadas viram o 500 genérico.
 - **O catálogo não cobre tudo — validei isso na prática:** depois de declarar a Fase 3 concluída, pedi uma segunda revisão independente do código refatorado. Ela encontrou 2 bugs reais que **não correspondem a nenhum dos 16 anti-patterns do catálogo**: overselling de estoque quando o mesmo produto aparece duas vezes no mesmo pedido (a validação comparava cada item contra o estoque original, sem somar a demanda acumulada) e ausência de validação de tipo/sinal em `quantidade`/`preço` (permitia número negativo ou string, gerando comportamento incorreto silencioso). Também achou uma violação de camada que a própria refatoração introduziu (SQL cru dentro de `admin_controller.py` e `main_controller.py`, driblando a regra "Controllers nunca executam SQL cru"). Todos foram corrigidos manualmente após a Fase 3. Isso deixou claro que o catálogo audita bem os padrões que conhece, mas bugs de lógica de negócio específicos do domínio (ex: regras de estoque) exigem revisão humana ou de agente adicional — é um candidato a novo item de catálogo para as próximas iterações.
-- **Corrigir um bug de integridade que o próprio código admitia, no Projeto 2:** o `DELETE /api/users/:id` original apagava o usuário mas deixava `enrollments`/`payments` órfãos, e a própria resposta de sucesso confessava isso em texto ("...mas as matrículas e pagamentos ficaram sujos no banco"). A skill tratou isso como o finding MEDIUM "Tratamento de Erros Genérico/Validação Ausente" exige — implementou exclusão em cascata e corrigiu o texto da resposta — e documentou a mudança de contrato no resumo da Fase 3, seguindo a mesma regra de exceção já usada no Projeto 1.
-- **Proteger rotas administrativas sem inventar um novo segredo:** `/api/admin/financial-report` e `DELETE /api/users/:id` não tinham nenhuma autenticação (finding HIGH "Autenticação Quebrada/Fraca"). Em vez de criar uma variável de ambiente nova, a skill reaproveitou `ADMIN_API_KEY`, que já existia no `.env` do boilerplate mas nunca era lida em nenhum lugar do código — sinal de que o próprio projeto já antecipava essa necessidade.
+- **Onde parar ao corrigir um bug de integridade que o próprio código admitia, no Projeto 2:** o `DELETE /api/users/:id` original apagava o usuário mas deixava `enrollments`/`payments` órfãos, e a própria resposta de sucesso confessava isso em texto ("...mas as matrículas e pagamentos ficaram sujos no banco"). Isso não é uma das exceções que `architecture-guidelines.md` obriga a corrigir automaticamente (SQLi, segredo vazado, endpoint de execução arbitrária) — é uma decisão de produto (cascade delete vs. bloquear a exclusão vs. manter como está). A skill preservou o contrato original (mesmo texto de resposta) e só corrigiu o que estava dentro do escopo do finding MEDIUM "Tratamento de Erros Genérico/Validação Ausente": validar o `id` recebido e parar de ignorar erros do banco silenciosamente.
+- **Proteger todas as rotas sem inventar um novo segredo nem um fluxo de login que o legado nunca teve:** nenhuma das 3 rotas (`POST /api/checkout`, `GET /api/admin/financial-report`, `DELETE /api/users/:id`) tinha autenticação (finding HIGH "Autenticação Quebrada/Fraca"), e o app original não tinha endpoint de login/sessão de usuário — o checkout cria conta implicitamente, sem nunca autenticar. Implementar JWT completo exigiria inventar um fluxo de sessão inexistente no legado, então a skill reaproveitou `ADMIN_API_KEY`, que já existia no `.env` do boilerplate mas nunca era lida em nenhum lugar do código, como uma chave de serviço estática: `middlewares/requireAdminAuth.js` valida `Authorization: Bearer <ADMIN_API_KEY>` e é aplicado com `app.use('/api', requireAdminAuth(config))` no composition root, cobrindo as 3 rotas de uma vez (não rota a rota). Isso também mudou o contrato do checkout, que antes era 100% anônimo/público — mudança documentada explicitamente no resumo da Fase 3, exigida pelo próprio `SKILL.md` ("todas as rotas precisam exigir token de autenticação").
+- **Remover o fallback de senha fraca sem quebrar o checkout de cliente novo:** o checkout original aplicava a senha fixa `"123456"` quando `pwd` não era enviado (`badCrypto(p || "123456")`), agravando o finding de autenticação quebrada. A skill passou a exigir `pwd` para criação de conta nova no checkout (`400 Bad Request` se ausente) em vez de manter um valor previsível — outra mudança de contrato pontual, documentada, e restrita ao caminho "usuário novo sem senha" (checkout de usuário já existente continua igual).
 - **Callback hell do driver `sqlite3` sem trocar de dependência:** o driver `sqlite3` do Node só expõe API por callback (ao contrário de `better-sqlite3`, não tem um modo Promise nativo), e era a causa raiz tanto do finding de Queries N+1 quanto da pirâmide de callbacks no checkout. Trocar de driver mudaria o comportamento de concorrência da conexão em memória, então a skill envolveu `get`/`all`/`run` numa classe `Database` com métodos que retornam Promises — permitindo controllers com `async/await` e uma única query com `JOIN` no relatório financeiro, sem alterar o driver subjacente.
 - **Evitar dependência nativa para hashing de senha:** o playbook sugere bcrypt/scrypt/argon2 para substituir hashes quebrados; o `bcrypt` nativo do Node exige compilação (`node-gyp`), que pode falhar em sandboxes sem toolchain de build. A skill usou `bcryptjs` (implementação pura em JS, mesma API) — a mesma lógica de decisão do `itsdangerous` no Projeto 1: preferir a biblioteca sem dependência nativa quando o resultado de segurança é equivalente.
 - **Projeto 3 já tinha camadas — o risco era recriar em vez de corrigir:** ao contrário dos Projetos 1 e 2 (monólitos), o `task-manager-api` já tinha `models/`, `routes/`, `services/`, `utils/`. Seguindo o "Princípio de adaptação" do `architecture-guidelines.md`, a Fase 3 não recriou nada disso — apenas adicionou as camadas que realmente faltavam (`config/`, `controllers/`, `middlewares/`) e corrigiu as violações dentro da estrutura existente (rotas com SQL/lógica de negócio embutidos viraram controllers finos; `services/notification_service.py` e `utils/helpers.py`, que existiam mas nunca eram chamados por nada, foram efetivamente conectados ou tiveram o código morto removido).
 - **`datetime.utcnow()` deprecated sem trocar a semântica de comparação:** a correção óbvia (`datetime.now(datetime.UTC)`) gera datetimes *timezone-aware*, mas o projeto 3 compara `due_date`/`created_at` (naive, vindos de `strptime` e de colunas SQLite) o tempo todo — misturar aware e naive quebra a comparação em runtime (`TypeError`). A skill centralizou um helper único `utils.helpers.utcnow()` que usa `datetime.now(timezone.utc).replace(tzinfo=None)`, eliminando a API deprecated sem tocar na semântica naive usada em todo o resto do código.
-- **Corrigir autenticação sem quebrar o contrato de toda a API:** o finding HIGH de autenticação quebrada (MD5 sem salt + token previsível) foi corrigido trocando para `werkzeug.security` e JWT real assinado (`PyJWT`) com expiração. A skill **não** adicionou um middleware de autenticação obrigatória em todas as rotas de escrita, porque isso mudaria o contrato de toda a API (exigiria que todo cliente passasse a enviar token) — uma decisão de produto, não uma correção pontual do finding. Essa lacuna foi documentada explicitamente no resumo da Fase 3 em vez de escondida.
+- **Corrigir autenticação sem deixar a API 100% pública:** o finding HIGH de autenticação quebrada (MD5 sem salt + token previsível + zero validação de token em qualquer rota) foi corrigido trocando o hashing para `werkzeug.security` e o token falso por um JWT real assinado (`PyJWT`) com expiração (`TOKEN_TTL_SECONDS`, lido do `.env`). Diferente da rodada anterior, a versão atualizada do `SKILL.md` torna explícito que emitir o token não fecha o finding sozinho — é preciso também **validar** esse token em toda rota protegida. A skill criou `middlewares/auth.py` (`token_required`) e aplicou o decorator nas 19 rotas de negócio (`/tasks*`, `/users*` exceto login, `/reports/*`, `/categories*`). A única decisão de design que restou foi *quais* rotas ficam de fora: `POST /login` continua público por necessidade lógica (é o próprio meio de obter o token — exigir token para logar seria circular), e `GET /health`/`GET /` continuam públicos por serem endpoints de infraestrutura, não de domínio. Essa exceção foi documentada explicitamente no resumo da Fase 3, e validada rota a rota com `curl` (401 sem `Authorization: Bearer`, status de sucesso original com um token válido).
 
 ## Seção C - Resultados
 
@@ -577,11 +580,11 @@ O maior risco de acoplamento não é a stack, é o **nível de organização pr�
 |---|---|---|---|---|---|---|---|---|
 | 1 — code-smells-project | Python/Flask 3.1.1 | 4 | ~780 | 4 | 4 | 3 | 4 | **15** |
 | 2 — ecommerce-api-legacy | Node.js/Express ^4.18.2 | 3 | ~180 | 2 | 4 | 2 | 4 | **12** |
-| 3 — task-manager-api | Python/Flask 3.0.0 | 15 | ~1160 | 2 | 2 | 4 | 4 | **12** |
+| 3 — task-manager-api | Python/Flask 3.0.0 | 15 | ~1158 | 1 | 3 | 4 | 4 | **12** |
 
 Os relatórios completos (saída literal da Fase 2, findings com `arquivo:linha` exatos) estão em `reports/audit-project-{1,2,3}.md`. Todos os 3 projetos atingiram o mínimo de 5 findings e pelo menos 1 CRITICAL/HIGH exigido pelos critérios de aceite.
 
-Observação sobre o Projeto 3: apesar de ter menos findings CRITICAL que o Projeto 1 (2 vs. 4), o total de findings (12) foi puxado por MEDIUM/LOW — reflexo direto de já ter alguma organização de camadas: não há mais "God Class" nem SQL Injection generalizado, mas restam problemas de qualidade (duplicação, N+1, tratamento de erro, código morto) espalhados pelas camadas existentes.
+Observação sobre o Projeto 3: apesar de ter menos findings CRITICAL que o Projeto 1 (1 vs. 4), o total de findings (12) foi puxado por HIGH/MEDIUM/LOW — reflexo direto de já ter alguma organização de camadas: não há mais "God Class" nem SQL Injection generalizado, mas restam 3 violações HIGH (lógica de negócio nas rotas, autenticação quebrada, acoplamento forte) e problemas de qualidade (duplicação, N+1, tratamento de erro, código morto) espalhados pelas camadas existentes.
 
 ### Comparação antes/depois da estrutura
 
@@ -603,33 +606,37 @@ Mudanças de contrato documentadas: endpoint `POST /admin/query` (execução de 
 **Projeto 2 — ecommerce-api-legacy**
 
 ```
-Antes (God Class, 3 arquivos)         Depois (MVC, 20 arquivos)
+Antes (God Class, 3 arquivos)         Depois (MVC, 21 arquivos)
 src/app.js        (bootstrap)         src/config/index.js
-src/AppManager.js (rotas+SQL+regra    src/controllers/{admin,checkout,user}Controller.js
+src/AppManager.js (rotas+SQL+regra    src/controllers/{checkout,report,user}Controller.js
                    de negócio p/ 5    src/middlewares/{errorHandler,requireAdminAuth}.js
-                   entidades)         src/models/{auditLog,course,enrollment,payment,user}Model.js + database.js
-src/utils.js       (config+cache+     src/routes/{admin,checkout,user}Routes.js
-                    crypto quebrado)  src/utils/{cache,logger,security}.js
-~180 LOC                              ~447 LOC
+                   entidades)         src/models/{auditLog,course,enrollment,payment,report,user}Model.js
+src/utils.js       (config+cache+                   + database.js + seed.js
+                    crypto quebrado)  src/routes/{admin,checkout,user}Routes.js
+                                       src/utils/{asyncHandler,cache,logger,security}.js
+~180 LOC                              ~467 LOC
 ```
 
-Mudanças de contrato documentadas: `DELETE /api/users/:id` e `GET /api/admin/financial-report` passaram a exigir header `x-api-key` (reaproveitando `ADMIN_API_KEY`, já presente no `.env` mas nunca lido); a exclusão de usuário passou a ser em cascata (antes deixava `enrollments`/`payments` órfãos, o que a própria resposta do endpoint admitia em texto).
+Mudanças de contrato documentadas: **todas** as 3 rotas (`POST /api/checkout`, `GET /api/admin/financial-report`, `DELETE /api/users/:id` — antes 100% públicas) passaram a exigir header `Authorization: Bearer <ADMIN_API_KEY>`, respondendo `401` sem ele; checkout de usuário novo sem `pwd` agora responde `400 Bad Request` em vez de aplicar silenciosamente a senha fraca padrão `"123456"`. A exclusão de usuário **manteve o comportamento original** (ainda deixa `enrollments`/`payments` órfãos, com o mesmo texto de resposta) — não é uma das exceções de segurança que o catálogo obriga a corrigir automaticamente (SQLi, segredo vazado, endpoint de execução arbitrária), então a skill preservou o contrato e só endureceu o que estava dentro do escopo do finding MEDIUM correspondente: validação do `id` (`400` se não for inteiro) e propagação de erros do banco em vez de ignorá-los silenciosamente.
 
 **Projeto 3 — task-manager-api**
 
 ```
-Antes (parcialmente organizado,       Depois (MVC completo, 23 arquivos)
+Antes (parcialmente organizado,       Depois (MVC completo, 24 arquivos)
 15 arquivos)                          config/settings.py                    [NOVO]
 models/, routes/, services/,          controllers/{task,user,report}_controller.py [NOVO]
-utils/ já existiam, mas com           middlewares/error_handler.py          [NOVO]
+utils/ já existiam, mas com           middlewares/{auth,error_handler}.py   [NOVO]
 SQL/lógica de negócio dentro          models/, routes/, services/, utils/   [AJUSTADOS in-place]
 das rotas, secrets hardcoded          app.py (composition root)             [AJUSTADO]
-ignorando o .env já existente
-~1160 LOC                             ~1136 LOC (menos, apesar das 3 camadas novas — código morto de
-                                       utils/helpers.py e services/ removido/conectado)
+ignorando o .env já existente,
+zero validação de token em
+qualquer rota
+~1158 LOC                             ~1330 LOC (cresceu apesar do código morto removido de
+                                       utils/helpers.py — o middleware de auth + JWT + controllers
+                                       explícitos adicionam mais linhas do que as que foram enxugadas)
 ```
 
-Mudanças de contrato documentadas: mensagens de erro 500 passaram a ser genéricas (`"Erro interno do servidor"`, antes cada rota tinha uma frase própria); `PUT /categories/<id>` com corpo vazio passou a responder 400 em vez de um no-op silencioso 200; `token` do login continua uma string, mas agora é um JWT assinado com expiração em vez de `'fake-jwt-token-' + id`.
+Mudanças de contrato documentadas: **todas** as rotas de negócio (`/tasks*`, `/users*` exceto `POST /login`, `/reports/*`, `/categories*` — 19 endpoints) passaram a exigir header `Authorization: Bearer <token>`, respondendo `401` sem ele (antes eram 100% públicas); `POST /login` continua público (é o meio de obter o token) e `GET /health`/`GET /` seguem públicos por serem infraestrutura; a resposta de usuário (`GET/POST/PUT /users*`, `POST /login`) não inclui mais o campo `password` (mesmo hasheado); `token` do login continua uma string, mas agora é um JWT assinado com expiração em vez de `'fake-jwt-token-' + id`; mensagens de erro verdadeiramente inesperadas passaram a ser genéricas (`"Erro interno do servidor"`, via middleware central — erros de negócio específicos como "Task não encontrada" continuam iguais); `PUT /categories/<id>` com corpo vazio passou a responder 400 em vez de um no-op silencioso 200.
 
 ### Checklist de validação
 
@@ -688,7 +695,7 @@ Mudanças de contrato documentadas: mensagens de erro 500 passaram a ser genéri
 - [x] Error handling centralizado (src/middlewares/errorHandler.js)
 - [x] Entry point claro (src/app.js)
 - [x] Aplicação inicia sem erros (validado via `node src/app.js`, log "Frankenstein LMS rodando na porta 3000")
-- [x] Endpoints originais respondem corretamente (/api/checkout, /api/admin/financial-report, DELETE /api/users/:id testados via curl, incluindo os novos 401 esperados sem x-api-key)
+- [x] Endpoints originais respondem corretamente (/api/checkout, /api/admin/financial-report, DELETE /api/users/:id testados via curl, cada um no par sem/com `Authorization: Bearer` — 401 sem token, status de sucesso original com token válido)
 ```
 
 **Projeto 3 — task-manager-api**
@@ -704,20 +711,20 @@ Mudanças de contrato documentadas: mensagens de erro 500 passaram a ser genéri
 - [x] Relatório segue o template definido nos arquivos de referência
 - [x] Cada finding tem arquivo e linhas exatos
 - [x] Findings ordenados por severidade (CRITICAL → LOW)
-- [x] Mínimo de 5 findings identificados (12 findings)
+- [x] Mínimo de 5 findings identificados (12 findings: 1 CRITICAL, 3 HIGH, 4 MEDIUM, 4 LOW)
 - [x] Detecção de APIs deprecated incluída (datetime.utcnow() encontrado em 9 arquivos, finding MEDIUM próprio)
 - [x] Skill pausa e pede confirmação antes da Fase 3
 
 ### Fase 3 — Refatoração
 - [x] Estrutura de diretórios segue padrão MVC (config/controllers/middlewares adicionados; models/routes/services/utils ajustados in-place, sem recriar do zero)
-- [x] Configuração extraída para módulo de config (sem hardcoded) — config/settings.py lê .env (SECRET_KEY, DATABASE_URL, SMTP_*, TOKEN_TTL_SECONDS)
-- [x] Models criados/ajustados para abstrair dados (Task.validate_status/validate_priority/is_overdue/search/stats, User com hashing seguro)
-- [x] Views/Routes separadas (routes/*_routes.py reduzidas a request → controller → jsonify)
-- [x] Controllers concentram o fluxo (controllers/{task,user,report}_controller.py)
-- [x] Error handling centralizado (middlewares/error_handler.py, com passthrough de HTTPException)
+- [x] Configuração extraída para módulo de config (sem hardcoded) — config/settings.py lê .env (SECRET_KEY, DATABASE_URL, HOST, PORT, CORS_ORIGINS, TOKEN_TTL_SECONDS, SMTP_*, NOTIFICATIONS_ENABLED)
+- [x] Models criados/ajustados para abstrair dados (Task.validate_status/validate_priority/is_overdue reconectados e usados pelos controllers; User com hashing seguro via werkzeug.security e geração de JWT via generate_token())
+- [x] Views/Routes separadas (routes/*_routes.py reduzidas a request → controller → jsonify, com `@token_required` em todas as rotas de negócio)
+- [x] Controllers concentram o fluxo (controllers/{task,user,report}_controller.py — report_controller também cobre /categories)
+- [x] Error handling centralizado (middlewares/error_handler.py, com passthrough de HTTPException) + middleware de autenticação centralizado (middlewares/auth.py)
 - [x] Entry point claro (app.py como composition root)
 - [x] Aplicação inicia sem erros (validado via `python seed.py` + `python app.py`, boot log limpo, debug off)
-- [x] Endpoints originais respondem corretamente (/, /health, /tasks*, /users*, /login, /reports/*, /categories* testados via curl, incluindo os erros esperados 400/401/403/404/409/415)
+- [x] Endpoints originais respondem corretamente (/, /health, /tasks*, /users*, /login, /reports/*, /categories* testados via curl) — as 19 rotas de negócio foram testadas em par: 401 sem `Authorization: Bearer`, status de sucesso original (200/201) com um token válido obtido via `POST /login`; erros de negócio (400/401/403/404/409/415) também confirmados
 ```
 
 ### Logs das aplicações rodando após a refatoração
@@ -758,15 +765,18 @@ Screenshots (`curl`/navegador) do Projeto 1 em execução, na ordem dos arquivos
 ```
 [INFO] Frankenstein LMS rodando na porta 3000...
 
-$ curl -X POST /api/checkout {...cartão "4111..."}   → 200 {"msg":"Sucesso","enrollment_id":2}
-$ curl -X POST /api/checkout {...cartão "5111..."}   → 400 "Pagamento recusado"
-$ curl /api/admin/financial-report (sem x-api-key)   → 401 {"error":"Não autorizado"}
-$ curl /api/admin/financial-report (com x-api-key)   → 200 [{"course":"Clean Architecture","revenue":997,...}]
-$ curl -X DELETE /api/users/1 (sem x-api-key)         → 401 {"error":"Não autorizado"}
-$ curl -X DELETE /api/users/1 (com x-api-key)         → 200 "Usuário deletado com sucesso, incluindo matrículas e pagamentos associados."
+$ curl -X POST /api/checkout (sem Authorization)                                   → 401 {"error":"Autenticação necessária"}
+$ curl -X POST /api/checkout -H "Authorization: Bearer <token>" {...cartão "4111..."} → 200 {"msg":"Sucesso","enrollment_id":2}
+$ curl -X POST /api/checkout -H "Authorization: Bearer <token>" {...cartão "5111..."} → 400 "Pagamento recusado"
+$ curl /api/admin/financial-report (sem Authorization)                             → 401 {"error":"Autenticação necessária"}
+$ curl /api/admin/financial-report -H "Authorization: Bearer <token>"              → 200 [{"course":"Clean Architecture","revenue":997,"students":[{"student":"Leonan","paid":997}]},{"course":"Docker","revenue":497,...}]
+$ curl -X DELETE /api/users/1 (sem Authorization)                                   → 401 {"error":"Autenticação necessária"}
+$ curl -X DELETE /api/users/1 -H "Authorization: Bearer <token>"                   → 200 "Usuário deletado, mas as matrículas e pagamentos ficaram sujos no banco."
+$ curl -X DELETE /api/users/abc -H "Authorization: Bearer <token>"                 → 400 "ID de usuário inválido"
+$ curl /api/admin/financial-report -H "Authorization: Bearer token-errado"         → 401 {"error":"Token inválido"}
 ```
 
-Screenshots (`curl`) do Projeto 2 em execução, na ordem dos arquivos em `screenshots/`:
+Screenshots (Postman) do Projeto 2 em execução, já com o esquema de autenticação final (`Authorization: Bearer <ADMIN_API_KEY>`, aplicado inclusive ao `POST /api/checkout`), na ordem dos arquivos em `screenshots/`:
 
 | Screenshot | Endpoint testado |
 |---|---|
@@ -782,12 +792,17 @@ Seed concluído com sucesso!
  * Debug mode: off
  * Running on http://127.0.0.1:5000
 
-$ curl /tasks/stats                         → 200 {"cancelled":1,"completion_rate":10.0,"done":1,"in_progress":2,"overdue":2,"pending":6,"total":10}
+$ curl /tasks                                → 401 {"error":"Autenticação necessária"}          ← sem token, antes era 200 público
 $ curl -X POST /login {"email":"joao@email.com","password":"1234"}
-  → 200 {"token":"eyJhbGciOiJIUzI1NiIs...", "user":{...,"password":"scrypt:32768:8:1$..."}}   ← JWT real + hash seguro (era MD5 + token previsível)
-$ curl -X PUT /categories/1 -d '{}'          → 400 {"error":"Dados inválidos"}                ← bug de validação ausente corrigido
-$ curl /nao-existe                           → 404 default do Flask (middleware de erro não interfere em HTTPException)
+  → 200 {"token":"eyJhbGciOiJIUzI1NiIs...", "user":{"id":1,"name":"João Silva",...}}            ← JWT real (era 'fake-jwt-token-1'); sem campo "password" na resposta
+$ curl /tasks -H "Authorization: Bearer <token>"                        → 200 [ ...10 tasks... ]
+$ curl /tasks -H "Authorization: Bearer token.invalido"                 → 401 {"error":"Token inválido"}
+$ curl /tasks/stats -H "Authorization: Bearer <token>"                  → 200 {"cancelled":1,"completion_rate":10.0,"done":1,"in_progress":2,"overdue":2,"pending":6,"total":10}
+$ curl -X PUT /categories/1 -H "Authorization: Bearer <token>" -d '{}'  → 400 {"error":"Dados inválidos"}   ← bug de validação ausente corrigido
+$ curl /nao-existe                                                      → 404 {"error":"Recurso não encontrado"}
 ```
+
+As 19 rotas de negócio (`/tasks*`, `/users*` exceto `/login`, `/reports/*`, `/categories*`) foram testadas nesse mesmo par sem-token/com-token — todas retornaram `401` sem `Authorization: Bearer` e o status de sucesso original com um token válido.
 
 Screenshots (`curl`) do Projeto 3 em execução, na ordem dos arquivos em `screenshots/`:
 
@@ -839,13 +854,12 @@ Cada execução gera a saída da Fase 2 no terminal — copie/cole (ou redirecio
 
 ### Como validar que a refatoração funcionou
 
-**Projeto 1 e 3 (Python/Flask):**
+**Projeto 1 (Python/Flask):**
 
 ```bash
-cd code-smells-project   # ou task-manager-api
+cd code-smells-project
 python3 -m venv .venv && source .venv/bin/activate   # se ainda não existir um venv
 pip install -r requirements.txt
-python seed.py            # apenas task-manager-api — popula o banco SQLite de exemplo
 python app.py              # sobe o servidor em http://localhost:5000
 ```
 
@@ -853,11 +867,36 @@ Em outro terminal:
 
 ```bash
 curl http://localhost:5000/health
-curl http://localhost:5000/produtos       # code-smells-project
-curl http://localhost:5000/tasks          # task-manager-api
+curl http://localhost:5000/produtos
 ```
 
 Status `200` e JSON de resposta confirmam que a aplicação subiu e os endpoints originais continuam funcionando. Confira também o log de boot: nenhuma exception deve aparecer entre o "Serving Flask app" e a primeira requisição.
+
+**Projeto 3 (Python/Flask, com autenticação obrigatória em todas as rotas de negócio):**
+
+```bash
+cd task-manager-api
+python3 -m venv .venv && source .venv/bin/activate   # se ainda não existir um venv
+pip install -r requirements.txt
+python seed.py              # popula o banco SQLite de exemplo (usuários, categorias, tasks)
+python app.py                # sobe o servidor em http://localhost:5000
+```
+
+Em outro terminal:
+
+```bash
+curl http://localhost:5000/health              # público, 200
+
+curl http://localhost:5000/tasks                # sem token → 401 {"error":"Autenticação necessária"}
+
+TOKEN=$(curl -s -X POST http://localhost:5000/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"joao@email.com","password":"1234"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+
+curl http://localhost:5000/tasks -H "Authorization: Bearer $TOKEN"   # com token → 200 [...]
+```
+
+`401` sem o header e `200`/`201` com um token válido em cada rota de negócio confirmam que a aplicação subiu e que o middleware de autenticação (finding HIGH da Fase 2) está de fato em vigor — não basta o token ser emitido no login, ele precisa ser validado em cada endpoint protegido.
 
 **Projeto 2 (Node.js/Express):**
 
@@ -872,23 +911,25 @@ Em outro terminal:
 ```bash
 curl -X POST http://localhost:3000/api/checkout \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <valor de ADMIN_API_KEY no .env>" \
   -d '{"usr":"Teste","eml":"teste@email.com","pwd":"123456","c_id":1,"card":"4111222233334444"}'
 
 curl http://localhost:3000/api/admin/financial-report \
-  -H "x-api-key: <valor de ADMIN_API_KEY no .env>"
+  -H "Authorization: Bearer <valor de ADMIN_API_KEY no .env>"
 ```
 
-Status `200` no checkout e no relatório administrativo (com a `x-api-key` correta) confirma que a aplicação e as rotas protegidas continuam funcionando após a refatoração. Testar a mesma rota administrativa sem o header deve retornar `401`, confirmando que a correção do finding de autenticação quebrada está em vigor.
+Status `200` no checkout e no relatório administrativo (com o token correto) confirma que a aplicação e as rotas protegidas continuam funcionando após a refatoração. Testar qualquer uma das 3 rotas (`checkout` incluído) sem o header `Authorization` deve retornar `401`, confirmando que a correção do finding de autenticação quebrada está em vigor em toda a API, não só nas rotas administrativas.
 
 Em todos os 3 projetos, encerre o processo do servidor (`Ctrl+C` ou `kill <pid>`) ao final da validação.
 
-## Dicas Finais
+## Considerações Finais
 
-- **Comece pela análise manual** — entender os problemas profundamente é essencial para criar uma skill que os detecte.
-- **O SKILL.md é um prompt** — ele instrui o agente sobre o que fazer, enquanto os arquivos de referência fornecem o conhecimento de domínio.
-- **Seja específico nos sinais de detecção** — "código ruim" não ajuda; "query SQL dentro de loop for" é acionável.
-- **Teste incrementalmente** — não tente criar a skill perfeita de primeira.
-- **A skill deve ser copiável** — se ela só funciona em um projeto específico, está acoplada demais. Teste nos 3 projetos para validar.
-- **Projetos diferentes exigem adaptação** — a Fase 3 de um projeto já parcialmente organizado não vai ter as mesmas transformações de um monolito. Sua skill deve se adaptar ao contexto.
-- **Pedir confirmação na Fase 2 é obrigatório** — o humano deve revisar o relatório antes de qualquer modificação.
-- **Consulte as referências do curso** — revise a documentação oficial da ferramenta escolhida e os materiais das aulas para relembrar a estrutura e anatomia de uma skill.
+O maior aprendizado deste desafio não foi escrever o catálogo de anti-patterns em si, mas perceber onde uma skill genérica precisa de julgamento humano para não virar automação cega:
+
+- **"Agnóstico de tecnologia" é mais sobre nível de organização do que sobre linguagem.** As três execuções confirmaram isso na prática: o mesmo `SKILL.md` + arquivos de referência, copiados byte-a-byte, lidaram bem com um monólito Python, um "God Class" em Node com callbacks, e um Flask parcialmente organizado — sem ajustar uma linha entre execuções. A adaptação real acontece dentro da própria skill (o "Princípio de adaptação" da Fase 3), não fora dela.
+- **Preservar contrato tem limite, e esse limite é o próprio finding de segurança.** Em todos os 3 projetos a Fase 3 quebrou algum comportamento antigo de propósito — endpoint de SQL arbitrário removido no Projeto 1, senha fraca padrão removida e todas as rotas passando a exigir token no Projeto 2, autenticação forjável substituída por JWT real no Projeto 3. A regra que funcionou bem: nunca quebrar por estética, sempre documentar quando quebrar por segurança.
+- **Nem toda proteção exige inventar infraestrutura nova.** No Projeto 2 a tentação seria implementar login + JWT completos (como o playbook exemplifica), mas o legado nunca teve conceito de sessão — o checkout cria conta implicitamente, sem autenticar. Reaproveitar o `ADMIN_API_KEY` já provisionado (e nunca lido) no `.env` como chave de serviço estática resolveu o finding sem inventar um fluxo de usuário que a aplicação original nunca teve.
+- **Documentação também precisa de auditoria — e não só de código.** Ao revisar este README, encontrei descrições do Projeto 2 (header `x-api-key`, exclusão em cascata, arquivo `adminController.js`, screenshots de Postman de uma iteração anterior sem auth no checkout) que já não batiam com o código efetivamente commitado após a última rodada da skill (header `Authorization: Bearer` nas 3 rotas, exclusão preservando o comportamento original, `reportController.js`). Corrigi o texto para refletir o comportamento real, validado por `curl`, e depois recapturei as screenshots do Postman já com o esquema de autenticação final — README errado é tão arriscado quanto código errado, porque é nele que alguém vai confiar para saber o que testar.
+- **O catálogo cobre padrões conhecidos, não bugs de domínio.** Ficou claro nas revisões independentes (Projeto 1) que anti-patterns arquiteturais e falhas de negócio são categorias diferentes — uma skill de refatoração estrutural não substitui revisão de regra de negócio. É um limite real da abordagem, não um bug da skill.
+
+Se fosse continuar o projeto, o próximo passo seria fechar a lacuna conhecida do Projeto 1 (rodar a Fase 3 novamente com o `SKILL.md` atualizado, para exigir token em 100% das rotas de negócio como já foi feito nos Projetos 2 e 3) e considerar um catálogo adicional, mais específico de domínio, para os casos que a auditoria estrutural não alcança (ex: regras de estoque, limites de negócio).
